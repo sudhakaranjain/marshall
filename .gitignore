@@ -1,0 +1,12 @@
+datasets/annotations_trainval2017/
+datasets/train2017/
+datasets/val2017/
+datasets/class_3*
+venv/
+rough/
+car*
+*__pycache__
+*ipynb*
+.idea/
+tb_logs/
+saved_models/
