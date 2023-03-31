@@ -62,9 +62,9 @@ class SingleClassDataset(Dataset):
         x = random.uniform(0, 1)
         if x <= 0.5:
             return {"input_modality": 'vision',
-                    "input": torch.stack(images),
+                    "student": torch.stack(images),
                     "reference": torch.stack(captions)}
         else:
             return {"input_modality": 'text',
-                    "input": torch.stack(captions),
+                    "student": torch.stack(captions),
                     "reference": torch.stack(images)}

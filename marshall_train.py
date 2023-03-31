@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 from data.dataset import SingleClassDataset
-from marshall import Marshall, MultiModalEncoder
+from marshall import Marshall, MultiModalEncoder, Encoder, Decoder
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -24,16 +24,30 @@ class MarshallTrainer(pl.LightningModule):
 
         self.config = config
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.student = MultiModalEncoder(config).to(device)
-        self.marshall = Marshall(encoder=self.student, device=device, config=config).to(device)
-        self.criterion = nn.SmoothL1Loss()
 
-    def forward(self, input_modality, input_batch, reference_batch):
-        return self.marshall(input_modality, input_batch, reference_batch)
+        self.encoder = Encoder(pretrained_model=config.model.text.pretrained_model,
+                               patch_size=config.dataset.patch_size, hidden_size=config.model.hidden_dim)
+        self.decoder = Decoder(hidden_size=config.model.hidden_dim, patch_size=config.dataset.patch_size,
+                               image_input_size=config.dataset.input_size, image_channels=config.dataset.in_channels)
+        self.student = MultiModalEncoder(config).to(device)
+        self.marshall = Marshall(student_model=self.student, device=device, config=config).to(device)
+        self.l1_loss = nn.SmoothL1Loss()
+        self.ce_loss = nn.CrossEntropyLoss()
+
+    def forward(self, input_modality, student_batch, reference_batch):
+        student_input, reference_input = self.encoder(input_modality, student_batch, reference_batch)
+        student_out, reference_out = self.marshall(input_modality, student_input, reference_input)
+        reconstructed = self.decoder(input_modality, student_out)
+        return student_out, reference_out, reconstructed
 
     def training_step(self, batch, batch_idx) -> torch.tensor:
-        x, y = self(batch['input_modality'], batch['input'], batch['reference'])
-        loss = self.criterion(x.float(), y.float()) + (1 - F.cosine_similarity(x.float(), y.float()).mean())
+        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['input'], batch['reference'])
+        student_out_l1 = student_out[-1].sum(dim=1)
+
+        recon_loss = self.l1_loss(reconstructed.float(), batch['input'].float()) \
+            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['input'].float())
+        loss = self.l1_loss(student_out_l1.float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out_l1.float(), reference_out.float()).mean()) + recon_loss
 
         # logging
         self.logger.experiment.add_scalar("loss/train_loss", loss, self.current_epoch)
@@ -44,8 +58,13 @@ class MarshallTrainer(pl.LightningModule):
         self.marshall.ema_step()
 
     def validation_step(self, batch, batch_idx):
-        x, y = self(batch['input_modality'], batch['input'], batch['reference'])
-        val_loss = self.criterion(x.float(), y.float()) + (1 - F.cosine_similarity(x.float(), y.float()).mean())
+        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['input'], batch['reference'])
+        student_out_l1 = student_out[-1].sum(dim=1)
+
+        recon_loss = self.l1_loss(reconstructed.float(), batch['input'].float()) \
+            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['input'].float())
+        val_loss = self.l1_loss(student_out_l1.float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out_l1.float(), reference_out.float()).mean()) + recon_loss
 
         # logging
         self.logger.experiment.add_scalar("loss/val_loss", val_loss, self.current_epoch)
@@ -53,9 +72,10 @@ class MarshallTrainer(pl.LightningModule):
         return val_loss
 
     def training_epoch_end(self, outputs: List):
-        if (self.trainer.current_epoch+1) % self.config.train.save_ckpt_freq == 0:
-            torch.save({'student': self.marshall.student_encoder.state_dict()},
-                       os.path.join(self.config.train.checkpoint_path, 'marshall_%d.pth' % (self.trainer.current_epoch+1)))
+        if (self.trainer.current_epoch + 1) % self.config.train.save_ckpt_freq == 0:
+            torch.save({'student': self.marshall.student_encoder.state_dict(), 'decoder': self.decoder.state_dict()},
+                       os.path.join(self.config.train.checkpoint_path,
+                                    'marshall_%d.pth' % (self.trainer.current_epoch + 1)))
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.marshall.parameters(), self.config.optimizer.lr)
