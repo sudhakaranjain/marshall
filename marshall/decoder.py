@@ -1,25 +1,26 @@
 from typing import List
 
+import omegaconf
 import torch.nn as nn
 import torch
 
 
 class Decoder(nn.Module):
-    def __init__(self, hidden_size: int, patch_size: int, image_input_size: int, image_channels: int):
+    def __init__(self, cfg: omegaconf.dictconfig.DictConfig):
         """
         Initializes the decoder model that contains both image_decoder and text_decoder.
 
-        :param hidden_size: dimension for projection embedding
-        :param patch_size: dimension for each patch created from the image
-        :param image_input_size: dimension for the image in the batch
-        :param image_channels: no. of channels that the images have
+        :param cfg: contains configuration data
         """
         super(Decoder, self).__init__()
-        self.hidden_size = hidden_size
-        self.image_input_size = image_input_size
-        self.image_channels = image_channels
-        self.image_decoder = ImageDecoder(hidden_size, patch_size, image_input_size, image_channels)
-        self.text_decoder = TextDecoder(hidden_size)
+
+        self.hidden_size = cfg.model.hidden_dim
+        self.patch_size = cfg.dataset.patch_size
+        self.image_input_size = cfg.dataset.input_size
+        self.image_channels = cfg.dataset.in_channels
+
+        self.image_decoder = ImageDecoder(self.hidden_size, self.patch_size, self.image_input_size, self.image_channels)
+        self.text_decoder = TextDecoder(self.hidden_size)
 
     def forward(self, modality: str, features: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -59,7 +60,6 @@ class ImageDecoder(nn.Module):
 
         :param features: features obtained from Marshall that needs to be decoded into images
         """
-
         x = self.linear_projection(features)
         x = self.conv2d_t1(x.reshape(-1, 1, (self.patch_size // 2), (self.patch_size // 2)))
         x = self.conv2d_t2(x)

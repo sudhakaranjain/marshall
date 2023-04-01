@@ -10,6 +10,7 @@ model:
   attn_heads: 12
   average_top_k_layers: 3
   head_layers: 2
+  dropout: 0.1
   normalize_targets: false
   ema_decay: 0.9998
   ema_end_decay: 0.9999

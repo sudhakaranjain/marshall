@@ -25,10 +25,8 @@ class MarshallTrainer(pl.LightningModule):
         self.config = config
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        self.encoder = Encoder(pretrained_model=config.model.text.pretrained_model,
-                               patch_size=config.dataset.patch_size, hidden_size=config.model.hidden_dim)
-        self.decoder = Decoder(hidden_size=config.model.hidden_dim, patch_size=config.dataset.patch_size,
-                               image_input_size=config.dataset.input_size, image_channels=config.dataset.in_channels)
+        self.encoder = Encoder(config)
+        self.decoder = Decoder(config)
         self.student = MultiModalEncoder(config).to(device)
         self.marshall = Marshall(student_model=self.student, device=device, config=config).to(device)
         self.l1_loss = nn.SmoothL1Loss()
