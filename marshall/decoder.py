@@ -59,25 +59,15 @@ class ImageDecoder(nn.Module):
 
         :param features: features obtained from Marshall that needs to be decoded into images
         """
-        patches = []
-        h_patches = []
-        patches_per_dim = self.image_input_size // self.patch_size
-        features = features.transpose(1, 0)
 
-        for patch_idx, x in enumerate(features):
-            x = self.linear_projection(x)
-            x = self.conv2d_t1(x.view(-1, 1, 8, 8))
-            x = self.conv2d_t2(x)
-            x = self.conv2d_t3(x)
-            x = self.conv2d_t4(x)
-
-            h_patches.append(x)
-            if (patch_idx + 1) % patches_per_dim == 0:
-                patches.append(h_patches)
-                h_patches = []
-
-        img = [torch.cat(h_patches, -1) for h_patches in patches]
-        return torch.cat(img, -2)
+        x = self.linear_projection(features)
+        x = self.conv2d_t1(x.reshape(-1, 1, (self.patch_size // 2), (self.patch_size // 2)))
+        x = self.conv2d_t2(x)
+        x = self.conv2d_t3(x)
+        x = self.conv2d_t4(x)
+        x = x.reshape(*features.shape[:2], *x.shape[1:])
+        x = x.transpose(1, 2)
+        return x.reshape(*x.shape[:2], self.image_input_size, self.image_input_size)
 
 
 # TODO: Implement the text decoder to reconstruct the captions
