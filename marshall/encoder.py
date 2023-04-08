@@ -71,7 +71,7 @@ class ImageEncoder(nn.Module):
         return self.dropout(x)
 
 
-# TODO: Implemented but should be verified once again, and doc strings need to be added
+# TODO: Implemented but should be verified once again
 class TextEncoder(nn.Module):
     def __init__(self, hidden_size: int, dropout: int, vocab_size: int = 30522,
                  max_seq_len: int = 512):

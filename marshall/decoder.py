@@ -83,7 +83,7 @@ class ImageDecoder(nn.Module):
         return x.reshape(*x.shape[:2], self.image_input_size, self.image_input_size)
 
 
-# TODO: Implement the text decoder to reconstruct the captions
+# TODO: Implemented but should be verified once again
 class TextDecoder(nn.Module):
     def __init__(self, hidden_size: int, vocab_size: int = 30522, max_seq_len: int = 512):
         """
