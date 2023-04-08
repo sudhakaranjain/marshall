@@ -69,7 +69,8 @@ class MarshallTrainer(pl.LightningModule):
 
     def training_epoch_end(self, outputs: List):
         if (self.trainer.current_epoch + 1) % self.config.train.save_ckpt_freq == 0:
-            torch.save({'student': self.marshall.student_encoder.state_dict(), 'decoder': self.decoder.state_dict()},
+            torch.save({'student': self.marshall.student_model.state_dict(), 'encoder': self.encoder.state_dict(),
+                        'decoder': self.decoder.state_dict()},
                        os.path.join(self.config.train.checkpoint_path,
                                     'marshall_%d.pth' % (self.trainer.current_epoch + 1)))
 
