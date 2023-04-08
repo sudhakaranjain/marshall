@@ -86,7 +86,11 @@ class ImageDecoder(nn.Module):
 # TODO: Implement the text decoder to reconstruct the captions
 class TextDecoder(nn.Module):
     def __init__(self, hidden_size: int, vocab_size: int = 30522, max_seq_len: int = 512):
-
+        """
+        :param hidden_size: dimension for projection embedding
+        :param vocab_size: vocab size of the tokenizer used
+        :param max_seq_len: maximum number of tokens in the input sequence
+        """
         super(TextDecoder, self).__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size

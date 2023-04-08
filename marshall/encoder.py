@@ -4,7 +4,6 @@ from typing import Tuple
 import omegaconf
 from einops.layers.torch import Rearrange
 from torch.autograd import Variable
-from transformers import AutoTokenizer
 import torch.nn as nn
 import torch
 
@@ -26,8 +25,7 @@ class Encoder(nn.Module):
 
         self.image_encoder = ImageEncoder(image_input_size=self.image_input_size, patch_size=self.patch_size,
                                           hidden_size=self.hidden_size, dropout=self.dropout)
-        self.text_encoder = TextEncoder(pretrained_model=self.pretrained_model,
-                                        hidden_size=self.hidden_size, dropout=self.dropout)
+        self.text_encoder = TextEncoder(hidden_size=self.hidden_size, dropout=self.dropout)
 
     def forward(self, modality: str, input_batch: torch.Tensor, reference_batch: torch.Tensor) -> Tuple[torch.Tensor,
                                                                                                         torch.Tensor]:
@@ -75,14 +73,16 @@ class ImageEncoder(nn.Module):
 
 # TODO: Implemented but should be verified once again, and doc strings need to be added
 class TextEncoder(nn.Module):
-    def __init__(self, pretrained_model, hidden_size: int, dropout: int, vocab_size: int = 30522,
+    def __init__(self, hidden_size: int, dropout: int, vocab_size: int = 30522,
                  max_seq_len: int = 512):
         """
         :param hidden_size: dimension for projection embedding
+        :param dropout: dropout probability
+        :param vocab_size: vocab size of the tokenizer used
+        :param max_seq_len: maximum number of tokens in the input sequence
         """
         super(TextEncoder, self).__init__()
         self.hidden_size = hidden_size
-        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
         self.embed = nn.Embedding(vocab_size, hidden_size)
         self.dropout = nn.Dropout(dropout)
 
@@ -101,9 +101,8 @@ class TextEncoder(nn.Module):
         """
         Gets the representation batch i.e. the pooled output for the input batch  of tokens.
 
-        :param text_batch:
+        :param text_batch: input text batch that needs to be processed (linear projection and positional encoding)
         """
-        # x = self.tokenizer(text_batch, padding=True, truncation=True, return_tensors="pt")['input_ids']
         x = self.embed(text_batch)
         x = x * math.sqrt(self.hidden_size)  # make embeddings relatively larger
         seq_len = x.size(1)  # add constant to embedding
