@@ -34,40 +34,38 @@ class MarshallTrainer(pl.LightningModule):
 
     def forward(self, input_modality, student_batch, reference_batch):
         student_input, reference_input = self.encoder(input_modality, student_batch, reference_batch)
-        student_out, reference_out = self.marshall(input_modality, student_input, reference_input)
+        student_out, student_out_reduced, reference_out = self.marshall(input_modality, student_input, reference_input)
         reconstructed = self.decoder(input_modality, student_out)
-        return student_out, reference_out, reconstructed
+        return student_out, student_out_reduced, reference_out, reconstructed
 
     def training_step(self, batch, batch_idx) -> torch.tensor:
-        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['input'], batch['reference'])
-        student_out_l1 = student_out[-1].sum(dim=1)
-
-        recon_loss = self.l1_loss(reconstructed.float(), batch['input'].float()) \
-            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['input'].float())
-        loss = self.l1_loss(student_out_l1.float(), reference_out.float()) + \
-            (1 - F.cosine_similarity(student_out_l1.float(), reference_out.float()).mean()) + recon_loss
+        student_out, student_out_reduced, reference_out, reconstructed = self(batch['input_modality'], batch['student'],
+                                                                              batch['reference'])
+        recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
+            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
+        multi_modal_loss = self.l1_loss(student_out_reduced.float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out_reduced.float(), reference_out.float()).mean())
 
         # logging
-        self.logger.experiment.add_scalar("loss/train_loss", loss, self.current_epoch)
+        self.logger.experiment.add_scalar("loss/train_loss", multi_modal_loss + recon_loss, self.current_epoch)
 
-        return loss
+        return multi_modal_loss + recon_loss
 
     def on_train_batch_end(self, *args, **kwargs):
         self.marshall.ema_step()
 
     def validation_step(self, batch, batch_idx):
-        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['input'], batch['reference'])
-        student_out_l1 = student_out[-1].sum(dim=1)
-
-        recon_loss = self.l1_loss(reconstructed.float(), batch['input'].float()) \
-            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['input'].float())
-        val_loss = self.l1_loss(student_out_l1.float(), reference_out.float()) + \
-            (1 - F.cosine_similarity(student_out_l1.float(), reference_out.float()).mean()) + recon_loss
+        student_out, student_out_reduced, reference_out, reconstructed = self(batch['input_modality'], batch['student'],
+                                                                              batch['reference'])
+        recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
+            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
+        multi_modal_loss = self.l1_loss(student_out_reduced.float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out_reduced.float(), reference_out.float()).mean())
 
         # logging
-        self.logger.experiment.add_scalar("loss/val_loss", val_loss, self.current_epoch)
+        self.logger.experiment.add_scalar("loss/val_loss", multi_modal_loss + recon_loss, self.current_epoch)
 
-        return val_loss
+        return multi_modal_loss + recon_loss
 
     def training_epoch_end(self, outputs: List):
         if (self.trainer.current_epoch + 1) % self.config.train.save_ckpt_freq == 0:

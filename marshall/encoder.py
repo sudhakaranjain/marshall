@@ -103,8 +103,8 @@ class TextEncoder(nn.Module):
 
         :param text_batch:
         """
-        x = self.tokenizer(text_batch, padding=True, truncation=True, return_tensors="pt")['input_ids']
-        x = self.embed(x)
+        # x = self.tokenizer(text_batch, padding=True, truncation=True, return_tensors="pt")['input_ids']
+        x = self.embed(text_batch)
         x = x * math.sqrt(self.hidden_size)  # make embeddings relatively larger
         seq_len = x.size(1)  # add constant to embedding
         x += Variable(self.pe[:, :seq_len], requires_grad=False)

@@ -129,15 +129,15 @@ class Marshall(nn.Module):
         """
         # model forward in online mode (student)
         # fetch the last layer outputs
-        x = self.student_model(input_modality, input_batch)
+        x = self.student_model(input_batch)[-1]
+        x_reduced = x.sum(dim=1)
         if reference_batch is None:
             return x
 
         # model forward in offline mode (teacher)
         with torch.no_grad():
             self.ema.model.eval()
-            reference_modality = 'text' if input_modality == 'vision' else 'vision'
-            y = self.ema.model(reference_modality, reference_batch)  # fetch the last transformer layers outputs
+            y = self.ema.model(reference_batch)  # fetch the last transformer layers outputs
             y = y[-self.config.model.average_top_k_layers:]  # take the last k transformer layers
 
             # Follow the same layer normalization procedure for text and vision
@@ -147,6 +147,7 @@ class Marshall(nn.Module):
             if self.config.model.normalize_targets:
                 y = F.layer_norm(y.float(), y.shape[-1:])
 
-        x = self.text_regression_head(x) if input_modality == 'text' else self.vision_regression_head(x)
+        x_reduced = self.text_regression_head(x_reduced) if input_modality == 'text' else \
+            self.vision_regression_head(x_reduced)
 
-        return x, y
+        return x, x_reduced, y
