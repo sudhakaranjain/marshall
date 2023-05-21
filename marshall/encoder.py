@@ -3,6 +3,7 @@ from typing import Tuple
 
 import omegaconf
 from einops.layers.torch import Rearrange
+from einops import repeat
 from torch.autograd import Variable
 import torch.nn as nn
 import torch
@@ -56,17 +57,21 @@ class ImageEncoder(nn.Module):
         no_of_patches = (image_input_size // patch_size) ** 2
         self.patch_n_flatten_layer = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)
         self.patch_projection = nn.Linear(patch_size * patch_size * 3, hidden_size)
-        self.pos_embedding = nn.Parameter(torch.randn(1, no_of_patches, hidden_size))
+        self.pos_embedding = nn.Parameter(torch.randn(1, no_of_patches + 1, hidden_size))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, image: torch.Tensor) -> torch.Tensor:
+    def forward(self, image_batch: torch.Tensor) -> torch.Tensor:
         """
         Gets the representation batch i.e. the output for the input batch of images.
 
-        :param image: input batch images that needs to be processed (patching and feature extraction)
+        :param image_batch: input batch images that needs to be processed (patching and feature extraction)
         """
-        x = self.patch_n_flatten_layer(image)
+        batch_size, _, _, = image_batch.shape
+        cls_tokens = repeat(self.cls_token, '() n e -> b n e', b=batch_size)
+        x = self.patch_n_flatten_layer(image_batch)
         x = self.patch_projection(x)
+        x = torch.cat([x, cls_tokens], dim=1)
         x += self.pos_embedding
         return self.dropout(x)
 
@@ -85,6 +90,7 @@ class TextEncoder(nn.Module):
         self.hidden_size = hidden_size
         self.embed = nn.Embedding(vocab_size, hidden_size)
         self.dropout = nn.Dropout(dropout)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
 
         # Positional Encoding:
         # create constant 'pe' matrix with values dependent on pos and i
@@ -103,8 +109,11 @@ class TextEncoder(nn.Module):
 
         :param text_batch: input text batch that needs to be processed (linear projection and positional encoding)
         """
+        batch_size, _, _, = text_batch.shape
+        cls_tokens = repeat(self.cls_token, '() n e -> b n e', b=batch_size)
         x = self.embed(text_batch)
         x = x * math.sqrt(self.hidden_size)  # make embeddings relatively larger
+        x = torch.cat([x, cls_tokens], dim=1)
         seq_len = x.size(1)  # add constant to embedding
         x += Variable(self.pe[:, :seq_len], requires_grad=False)
         return self.dropout(x)

@@ -38,3 +38,4 @@ criterion:
   loss_beta: 2
 optimizer:
   lr: 1e-4
+  lr_decay: 0.5

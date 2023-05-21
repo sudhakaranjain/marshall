@@ -34,17 +34,16 @@ class MarshallTrainer(pl.LightningModule):
 
     def forward(self, input_modality, student_batch, reference_batch):
         student_input, reference_input = self.encoder(input_modality, student_batch, reference_batch)
-        student_out, student_out_reduced, reference_out = self.marshall(input_modality, student_input, reference_input)
+        student_out, reference_out = self.marshall(input_modality, student_input, reference_input)
         reconstructed = self.decoder(input_modality, student_out)
-        return student_out, student_out_reduced, reference_out, reconstructed
+        return student_out, reference_out, reconstructed
 
     def training_step(self, batch, batch_idx) -> torch.tensor:
-        student_out, student_out_reduced, reference_out, reconstructed = self(batch['input_modality'], batch['student'],
-                                                                              batch['reference'])
+        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['student'], batch['reference'])
         recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
             if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
-        multi_modal_loss = self.l1_loss(student_out_reduced.float(), reference_out.float()) + \
-            (1 - F.cosine_similarity(student_out_reduced.float(), reference_out.float()).mean())
+        multi_modal_loss = self.l1_loss(student_out.float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out.float(), reference_out.float()).mean())
 
         # logging
         self.logger.experiment.add_scalar("loss/train_loss", multi_modal_loss + recon_loss, self.current_epoch)
@@ -75,7 +74,9 @@ class MarshallTrainer(pl.LightningModule):
                                     'marshall_%d.pth' % (self.trainer.current_epoch + 1)))
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.marshall.parameters(), self.config.optimizer.lr)
+        optimizer = torch.optim.Adam(self.marshall.parameters(), self.config.optimizer.lr)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=self.config.optimizer.lr_decay)
+        return optimizer, scheduler
 
 
 if __name__ == '__main__':

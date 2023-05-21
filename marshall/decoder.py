@@ -48,11 +48,12 @@ class ImageDecoder(nn.Module):
         super(ImageDecoder, self).__init__()
         self.patch_size = patch_size
         self.image_input_size = image_input_size
-        self.linear_projection = nn.Linear(hidden_size, (patch_size // 2) ** 2)
-        self.conv2d_t1 = nn.ConvTranspose2d(1, 32, 3, stride=1)
-        self.conv2d_t2 = nn.ConvTranspose2d(32, 16, 3, stride=1)
-        self.conv2d_t3 = nn.ConvTranspose2d(16, 8, 3, stride=1)
-        self.conv2d_t4 = nn.ConvTranspose2d(8, image_channels, 3, stride=1)
+        self.linear_projection = nn.Linear(hidden_size, hidden_size)
+        self.conv2d_t1 = nn.ConvTranspose2d(12, 16, 7, stride=1)
+        self.conv2d_t2 = nn.ConvTranspose2d(16, 32, 2, stride=2)
+        self.conv2d_t3 = nn.ConvTranspose2d(32, 16, 2, stride=2)
+        self.conv2d_t4 = nn.ConvTranspose2d(16, 8, 2, stride=2)
+        self.conv2d_t5 = nn.ConvTranspose2d(8, image_channels, 2, stride=2)
         self.relu = nn.ReLU()
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
@@ -62,25 +63,23 @@ class ImageDecoder(nn.Module):
         :param features: features obtained from Marshall that needs to be decoded into images
         """
 
-        # features is of shape: [batch_size, number_of_patches, hidden_dim]
-        # projecting it to shape: [batch_size, number_of_patches, 64], for patch_size 16:
+        # features is of shape: [batch_size, 1, hidden_dim]
+        # projecting it to shape: [batch_size, 1, hidden_dim]
         x = self.linear_projection(features)
         x = self.relu(x)
-        # reshaping to [batch_size * number_of_patches, 1, 8, 8], for patch_size of 16:
-        x = x.reshape(-1, 1, (self.patch_size // 2), (self.patch_size // 2))
+        # reshaping to [batch_size, deduced_channels: 12 (for hidden_dim: 768), 8, 8]
+        x = x.reshape(features.shape[0], -1, 8, 8)
         x = self.conv2d_t1(x)
         x = self.relu(x)
         x = self.conv2d_t2(x)
         x = self.relu(x)
         x = self.conv2d_t3(x)
         x = self.relu(x)
-        x = self.conv2d_t4(x)  # resulting shape: [batch_size * number_of_patches, 3, 16, 16]
+        x = self.conv2d_t4(x)
         x = self.relu(x)
-        x = x.reshape(*features.shape[:2], *x.shape[1:])  # resulting shape: [batch_size, number_of_patches, 3, 16, 16]
-        # swapping dimensions inorder to aggregate the patches to form one complete image:
-        x = x.transpose(1, 2)  # resulting shape: [batch_size, 3, number_of_patches, 16, 16]
-        # returning images of shape: [batch_size, 3, 224, 224] for image_input_size of 224:
-        return x.reshape(*x.shape[:2], self.image_input_size, self.image_input_size)
+        x = self.conv2d_t5(x)
+        x = self.relu(x)
+        return x  # resulting shape: [batch_size, 3, image_input_size, image_input_size]
 
 
 # TODO: Implemented but should be verified once again
