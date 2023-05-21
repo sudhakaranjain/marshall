@@ -54,12 +54,12 @@ class MarshallTrainer(pl.LightningModule):
         self.marshall.ema_step()
 
     def validation_step(self, batch, batch_idx):
-        student_out, student_out_reduced, reference_out, reconstructed = self(batch['input_modality'], batch['student'],
+        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['student'],
                                                                               batch['reference'])
         recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
             if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
-        multi_modal_loss = self.l1_loss(student_out_reduced.float(), reference_out.float()) + \
-            (1 - F.cosine_similarity(student_out_reduced.float(), reference_out.float()).mean())
+        multi_modal_loss = self.l1_loss(student_out.float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out.float(), reference_out.float()).mean())
 
         # logging
         self.logger.experiment.add_scalar("loss/val_loss", multi_modal_loss + recon_loss, self.current_epoch)
