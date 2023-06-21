@@ -3,8 +3,7 @@
 ### Setup
 Python 3.8 or above
 #### Install Requirements:
-1. Create a virtual environment using `venv`
-2. Run `pip install -r requirements.txt`
+Run `make install`
 
 #### Dataset:
  Download MS COCO dataset and place these folders inside `datasets` folder:
