@@ -108,10 +108,12 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(config.model.text.pretrained_model)
 
     # Initialize Dataset
-    train_dataset = SingleClassDataset(images_path=os.path.join(args.dataset_path, "class_3_train"),
-                                       file_paths="class_3_train.json", tokenizer=tokenizer, config=config)
-    val_dataset = SingleClassDataset(images_path=os.path.join(args.dataset_path, "class_3_val"),
-                                     file_paths="class_3_val.json", tokenizer=tokenizer, config=config)
+    train_dataset = SingleClassDataset(dataset_path=os.path.join(args.dataset_path, "train2017"),
+                                       caption_path=os.path.join(args.dataset_path, "train_captions.json"),
+                                       tokenizer=tokenizer, config=config)
+    val_dataset = SingleClassDataset(dataset_path=os.path.join(args.dataset_path, "val2017"),
+                                     caption_path=os.path.join(args.dataset_path, "val_captions.json"),
+                                     tokenizer=tokenizer, config=config)
 
     # Initialize Dataloader
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.batch_size,
