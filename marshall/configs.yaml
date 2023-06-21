@@ -33,7 +33,7 @@ train:
   batch_size: 16
   shuffle: true
   save_ckpt_freq: 20
-  checkpoint_path: './saved_models/v1/'
+  checkpoint_path: '../saved_models/v1/'
 criterion:
   loss_beta: 2
 optimizer:
