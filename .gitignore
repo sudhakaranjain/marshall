@@ -10,3 +10,4 @@ car*
 .idea/
 tb_logs/
 saved_models/
+marshall.egg-info

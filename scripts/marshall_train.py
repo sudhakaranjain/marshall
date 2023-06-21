@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import List
+from typing import List, Tuple
 
 import omegaconf
 import pytorch_lightning as pl
@@ -12,7 +12,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from data.dataset import SingleClassDataset
+from marshall.data.dataset import SingleClassDataset
 from marshall import Marshall, MultiModalEncoder, Encoder, Decoder
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -32,18 +32,28 @@ class MarshallTrainer(pl.LightningModule):
         self.l1_loss = nn.SmoothL1Loss()
         self.ce_loss = nn.CrossEntropyLoss()
 
-    def forward(self, input_modality, student_batch, reference_batch):
+    def forward(self, input_modality, student_batch, reference_batch) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
+        # encoding the modalities with modal specific encoders
         student_input, reference_input = self.encoder(input_modality, student_batch, reference_batch)
+        # getting the output representations with the (common) modality agnostic model
         student_out, reference_out = self.marshall(input_modality, student_input, reference_input)
-        reconstructed = self.decoder(input_modality, student_out)
+        # reconstructing the input from all but last token embeddings
+        reconstructed = self.decoder(input_modality, student_out[:, :-1, :])
+
         return student_out, reference_out, reconstructed
 
     def training_step(self, batch, batch_idx) -> torch.tensor:
+        # student_out contains all token embedding outputs
+        # reference_out contains last token embedding output
         student_out, reference_out, reconstructed = self(batch['input_modality'], batch['student'], batch['reference'])
+
+        # reconstruction loss
         recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
             if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
-        multi_modal_loss = self.l1_loss(student_out.float(), reference_out.float()) + \
-            (1 - F.cosine_similarity(student_out.float(), reference_out.float()).mean())
+
+        # loss for minimizing the distance between last token embedding representation
+        multi_modal_loss = self.l1_loss(student_out[:, -1, :].float(), reference_out.float()) + \
+            (1 - F.cosine_similarity(student_out[:, -1, :].float(), reference_out.float()).mean())
 
         # logging
         self.logger.experiment.add_scalar("loss/train_loss", multi_modal_loss + recon_loss, self.current_epoch)
@@ -54,12 +64,17 @@ class MarshallTrainer(pl.LightningModule):
         self.marshall.ema_step()
 
     def validation_step(self, batch, batch_idx):
-        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['student'],
-                                                                              batch['reference'])
+        # student_out contains all token embedding outputs
+        # reference_out contains last token embedding output
+        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['student'], batch['reference'])
+
+        # reconstruction loss
         recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
             if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
-        multi_modal_loss = self.l1_loss(student_out.float(), reference_out.float()) + \
-            (1 - F.cosine_similarity(student_out.float(), reference_out.float()).mean())
+
+        # loss for minimizing the distance between last token embedding representation
+        multi_modal_loss = self.l1_loss(student_out[:, -1, :].float(), reference_out.float()) + \
+                           (1 - F.cosine_similarity(student_out[:, -1, :].float(), reference_out.float()).mean())
 
         # logging
         self.logger.experiment.add_scalar("loss/val_loss", multi_modal_loss + recon_loss, self.current_epoch)
@@ -76,18 +91,18 @@ class MarshallTrainer(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.marshall.parameters(), self.config.optimizer.lr)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=self.config.optimizer.lr_decay)
-        return optimizer, scheduler
+        return [optimizer], [scheduler]
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Marshall Training", add_help=True)
 
-    parser.add_argument("-d", "--dataset-path", type=str, default="./datasets", help="Path to the dataset folder")
+    parser.add_argument("-d", "--dataset-path", type=str, default="../datasets", help="Path to the dataset folder")
 
     args = parser.parse_args()
 
     # Get config file
-    config = omegaconf.OmegaConf.load('marshall/configs.yaml')
+    config = omegaconf.OmegaConf.load('../marshall/configs.yaml')
 
     # Initialize tokenizer
     tokenizer = AutoTokenizer.from_pretrained(config.model.text.pretrained_model)

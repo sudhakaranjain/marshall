@@ -2,7 +2,6 @@ from typing import Any, List, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from marshall.ema import EMA
 
@@ -20,32 +19,24 @@ class MultiModalEncoder(nn.Module):
 
         # Fusion layer
         # TODO: Experiment with different fusion layer
-        self.fusion_layer_type = config.model.fusion_layer
         self.config = config
-        if self.fusion_layer_type == 'transformer':
-            self.fusion_layer = []
-            for i in range(self.config.model.n_layers):
-                if i < self.config.model.n_layers - 1:
-                    self.fusion_layer.append(nn.Sequential(
-                        nn.TransformerEncoderLayer(d_model=self.hidden, nhead=self.config.model.attn_heads,
-                                                   batch_first=True),
-                        nn.LayerNorm(self.hidden),
-                    ))
-                else:
-                    self.fusion_layer.append(nn.Sequential(
-                        nn.TransformerEncoderLayer(d_model=self.hidden, nhead=self.config.model.attn_heads,
-                                                   batch_first=True),
-                        nn.LayerNorm(self.hidden),
-                        nn.Linear(self.hidden, self.hidden),
-                        nn.Tanh(),
-                    ))
-            self.fusion_layer = nn.ModuleList(self.fusion_layer)
-        elif self.fusion_layer_type == 'mlp':
-            self.fusion_layer = nn.Sequential(
-                nn.Linear(self.hidden, self.hidden * 2),
-                nn.GELU(),
-                nn.Linear(self.hidden * 2, self.hidden)
-            )
+        self.fusion_layer = []
+        for i in range(self.config.model.n_layers):
+            if i < self.config.model.n_layers - 1:
+                self.fusion_layer.append(nn.Sequential(
+                    nn.TransformerEncoderLayer(d_model=self.hidden, nhead=self.config.model.attn_heads,
+                                               batch_first=True),
+                    nn.LayerNorm(self.hidden),
+                ))
+            else:
+                self.fusion_layer.append(nn.Sequential(
+                    nn.TransformerEncoderLayer(d_model=self.hidden, nhead=self.config.model.attn_heads,
+                                               batch_first=True),
+                    nn.LayerNorm(self.hidden),
+                    nn.Linear(self.hidden, self.hidden),
+                    nn.Tanh(),
+                ))
+        self.fusion_layer = nn.ModuleList(self.fusion_layer)
 
     def forward(self, x: torch.Tensor) -> Union[List[torch.Tensor], torch.Tensor]:
         """
@@ -54,13 +45,9 @@ class MultiModalEncoder(nn.Module):
         :param x: Input batch
         :returns: representation vectors of the input batch
         """
-        if self.fusion_layer_type == 'transformer':
-            for i in range(self.config.model.n_layers):
-                x = self.fusion_layer[i](x)
-            # returning last (cls) token embedding output
-            return x[:, -1, :]
-        elif self.fusion_layer_type == 'mlp':
-            return self.fusion_layer(x)
+        for i in range(self.config.model.n_layers):
+            x = self.fusion_layer[i](x)
+        return x
 
 
 class Marshall(nn.Module):
@@ -135,11 +122,12 @@ class Marshall(nn.Module):
         # model forward in offline mode (teacher)
         with torch.no_grad():
             self.ema.model.eval()
-            y = self.ema.model(reference_batch)  # fetch the last token embedding output
+            y = self.ema.model(reference_batch)[:, -1, :]  # fetch the last token embedding output
 
         # TODO: Applying normalization to embeddings
+        x_computed = x.clone()
+        x_computed[:, -1, :] = self.text_regression_head(x[:, -1, :]) if input_modality == 'text' else \
+            self.vision_regression_head(x[:, -1, :])
 
-        x = self.text_regression_head(x) if input_modality == 'text' else \
-            self.vision_regression_head(x)
-
-        return x, y
+        # returning x with  all token embedding output, y with last token embedding output
+        return x_computed, y
