@@ -18,7 +18,6 @@ class MultiModalEncoder(nn.Module):
         self.hidden = config.model.hidden_dim
 
         # Fusion layer
-        # TODO: Experiment with different fusion layer
         self.config = config
         self.fusion_layer = []
         for i in range(self.config.model.n_layers):
@@ -124,7 +123,7 @@ class Marshall(nn.Module):
             self.ema.model.eval()
             y = self.ema.model(reference_batch)[:, -1, :]  # fetch the last token embedding output
 
-        # TODO: Applying normalization to embeddings
+        # TODO: Test applying normalization to embeddings
         x_computed = x.clone()
         x_computed[:, -1, :] = self.text_regression_head(x[:, -1, :]) if input_modality == 'text' else \
             self.vision_regression_head(x[:, -1, :])

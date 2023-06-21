@@ -120,7 +120,6 @@ if __name__ == '__main__':
     val_dataloader = DataLoader(val_dataset, batch_size=config.train.batch_size,
                                 collate_fn=SingleClassDataset.collate_fn, shuffle=False, drop_last=True,
                                 num_workers=10)
-    # TODO: Tested till the above line and it works
 
     # Initialize Trainer and train the model
     model = MarshallTrainer(config)
