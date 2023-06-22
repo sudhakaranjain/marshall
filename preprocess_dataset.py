@@ -57,7 +57,7 @@ if __name__ == "__main__":
             if image["id"] == ann["image_id"]:
                 im = Image.open(os.path.join(images_data_path, image["file_name"]))
                 if len(im.split()) < 3:
-                	break
+                    break
                 im.save(os.path.join(extract_data_path, image["file_name"]))
                 if label:
                     positive_extracted_count += 1

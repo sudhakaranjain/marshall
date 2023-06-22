@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     # Initialize Trainer and train the model
     model = MarshallTrainer(config)
-    logger = TensorBoardLogger('tb_logs', name='marshall_train_logs')
+    logger = TensorBoardLogger('../tb_logs', name='marshall_train_logs')
     os.makedirs(config.train.checkpoint_path, exist_ok=True)
     if torch.cuda.is_available():
         trainer = Trainer(gpus=-1, auto_select_gpus=True, max_epochs=config.train.epochs, gradient_clip_val=1.0,
