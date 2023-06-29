@@ -104,24 +104,21 @@ if __name__ == '__main__':
     # Get config file
     config = omegaconf.OmegaConf.load('../marshall/configs.yaml')
 
-    # Initialize tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(config.model.text.pretrained_model)
-
     # Initialize Dataset
     train_dataset = SingleClassDataset(dataset_path=os.path.join(args.dataset_path, "train2017"),
                                        caption_path=os.path.join(args.dataset_path, "train_captions.json"),
-                                       tokenizer=tokenizer, config=config)
+                                       config=config)
     val_dataset = SingleClassDataset(dataset_path=os.path.join(args.dataset_path, "val2017"),
                                      caption_path=os.path.join(args.dataset_path, "val_captions.json"),
-                                     tokenizer=tokenizer, config=config)
+                                     config=config)
 
     # Initialize Dataloader
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.batch_size,
                                   collate_fn=SingleClassDataset.collate_fn, shuffle=True, drop_last=True,
-                                  num_workers=10)
+                                  num_workers=20)
     val_dataloader = DataLoader(val_dataset, batch_size=config.train.batch_size,
                                 collate_fn=SingleClassDataset.collate_fn, shuffle=False, drop_last=True,
-                                num_workers=10)
+                                num_workers=20)
 
     # Initialize Trainer and train the model
     model = MarshallTrainer(config)

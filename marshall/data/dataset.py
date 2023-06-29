@@ -4,19 +4,24 @@ import random
 from typing import Any, Dict, List, Union
 
 import torch
+import omegaconf
 from omegaconf.dictconfig import DictConfig
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms.functional import to_tensor
+from transformers import AutoTokenizer
+
+# Get config file
+config = omegaconf.OmegaConf.load('../marshall/configs.yaml')
+# Initialize tokenizer
+tokenizer = AutoTokenizer.from_pretrained(config.model.text.pretrained_model)
 
 
 class SingleClassDataset(Dataset):
     def __init__(self,
                  dataset_path: str,
                  caption_path: str,
-                 config: DictConfig,
-                 tokenizer: Any,
-                 max_length: int = 0):
+                 config: DictConfig):
         """
         Initialize the SingleClassDataset.
 
@@ -34,10 +39,7 @@ class SingleClassDataset(Dataset):
             self.img_paths_and_captions = json.load(f)
 
         # Only considering the first caption from list of captions for a given image
-        all_captions = [path["captions"][0] for path in self.img_paths_and_captions]
-        # Tokenize the captions
-        self.caption_tokens = self.tokenizer(all_captions, max_length=max_length, truncation=True, padding=True,
-                                             return_tensors='pt', return_attention_mask=False)['input_ids']
+        self.all_captions = [path["captions"][0] for path in self.img_paths_and_captions]
 
     def __len__(self) -> int:
         """Returns the len of the Dataset"""
@@ -50,7 +52,7 @@ class SingleClassDataset(Dataset):
         """
         img = Image.open(os.path.join(self.dataset_path, self.img_paths_and_captions[idx]['file_name']))
         return {"image": to_tensor(img.resize((self.config.dataset.input_size, self.config.dataset.input_size))),
-                "caption": self.caption_tokens[idx]}
+                "caption": self.all_captions[idx]}
 
     @staticmethod
     def collate_fn(batch):
@@ -64,8 +66,10 @@ class SingleClassDataset(Dataset):
         if x <= 0.5:
             return {"input_modality": 'vision',
                     "student": torch.stack(images),
-                    "reference": torch.stack(captions)}
+                    "reference": tokenizer(captions, max_length=None, truncation=True, padding=True,
+                                           return_tensors='pt', return_attention_mask=False)['input_ids']}
         else:
             return {"input_modality": 'text',
-                    "student": torch.stack(captions),
+                    "student": tokenizer(captions, max_length=None, truncation=True, padding=True,
+                                         return_tensors='pt', return_attention_mask=False)['input_ids'],
                     "reference": torch.stack(images)}
