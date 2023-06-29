@@ -129,7 +129,8 @@ if __name__ == '__main__':
     os.makedirs(config.train.checkpoint_path, exist_ok=True)
     if torch.cuda.is_available():
         trainer = Trainer(gpus=-1, auto_select_gpus=True, max_epochs=config.train.epochs, gradient_clip_val=1.0,
-                          logger=logger)
+                          enable_checkpointing=False, logger=logger)
     else:
-        trainer = Trainer(max_epochs=config.train.epochs, gradient_clip_val=1.0, logger=logger)
+        trainer = Trainer(max_epochs=config.train.epochs, gradient_clip_val=1.0, enable_checkpointing=False,
+                          logger=logger)
     trainer.fit(model, train_dataloader, val_dataloader)
