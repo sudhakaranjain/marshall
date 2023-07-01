@@ -38,9 +38,15 @@ class Encoder(nn.Module):
         :param reference_batch: reference batch that needs to be processed (patching or tokenizing)
         """
         if modality == 'vision':
-            return self.image_encoder(input_batch), self.text_encoder(reference_batch)
+            student_output = self.image_encoder(input_batch)
+            with torch.no_grad():
+                reference_output = self.text_encoder(reference_batch)
+            return student_output, reference_output
         elif modality == 'text':
-            return self.text_encoder(input_batch), self.image_encoder(reference_batch)
+            student_output = self.text_encoder(input_batch)
+            with torch.no_grad():
+                reference_output = self.image_encoder(reference_batch)
+            return student_output, reference_output
 
 
 class ImageEncoder(nn.Module):
