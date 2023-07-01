@@ -29,8 +29,8 @@ dataset:
   min_mask_patches_per_block: 16
   imagenet_default_mean_and_std: false
 train:
-  epochs: 100
-  batch_size: 16
+  epochs: 200
+  batch_size: 128
   shuffle: true
   save_ckpt_freq: 20
   checkpoint_path: '../saved_models/v1/'
@@ -38,4 +38,4 @@ criterion:
   loss_beta: 2
 optimizer:
   lr: 1e-4
-  lr_decay: 0.5
+  lr_decay: 0.98

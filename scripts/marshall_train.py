@@ -90,7 +90,7 @@ class MarshallTrainer(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.marshall.parameters(), self.config.optimizer.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=self.config.optimizer.lr_decay)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=self.config.optimizer.lr_decay)
         return [optimizer], [scheduler]
 
 
