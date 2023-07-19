@@ -10,9 +10,8 @@ import torch.nn.functional as F
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
 
-from marshall.data.dataset import SingleClassDataset
+from marshall.data.dataset import SBUDataset
 from marshall import Marshall, MultiModalEncoder, Encoder, Decoder
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -63,24 +62,6 @@ class MarshallTrainer(pl.LightningModule):
     def on_train_batch_end(self, *args, **kwargs):
         self.marshall.ema_step()
 
-    def validation_step(self, batch, batch_idx):
-        # student_out contains all token embedding outputs
-        # reference_out contains last token embedding output
-        student_out, reference_out, reconstructed = self(batch['input_modality'], batch['student'], batch['reference'])
-
-        # reconstruction loss
-        recon_loss = self.l1_loss(reconstructed.float(), batch['student'].float()) \
-            if batch['input_modality'] == 'vision' else self.ce_loss(reconstructed.float(), batch['student'].long())
-
-        # loss for minimizing the distance between last token embedding representation
-        multi_modal_loss = self.l1_loss(student_out[:, -1, :].float(), reference_out.float()) + \
-                           (1 - F.cosine_similarity(student_out[:, -1, :].float(), reference_out.float()).mean())
-
-        # logging
-        self.logger.experiment.add_scalar("loss/val_loss", multi_modal_loss + recon_loss, self.current_epoch)
-
-        return multi_modal_loss + recon_loss
-
     def training_epoch_end(self, outputs: List):
         if (self.trainer.current_epoch + 1) % self.config.train.save_ckpt_freq == 0:
             torch.save({'student': self.marshall.student_model.state_dict(), 'encoder': self.encoder.state_dict(),
@@ -105,20 +86,12 @@ if __name__ == '__main__':
     config = omegaconf.OmegaConf.load('../marshall/configs.yaml')
 
     # Initialize Dataset
-    train_dataset = SingleClassDataset(dataset_path=os.path.join(args.dataset_path, "train2017"),
-                                       caption_path=os.path.join(args.dataset_path, "train_captions.json"),
-                                       config=config)
-    val_dataset = SingleClassDataset(dataset_path=os.path.join(args.dataset_path, "val2017"),
-                                     caption_path=os.path.join(args.dataset_path, "val_captions.json"),
-                                     config=config)
+    train_dataset = SBUDataset(config=config)
 
     # Initialize Dataloader
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.batch_size,
-                                  collate_fn=SingleClassDataset.collate_fn, shuffle=True, drop_last=True,
-                                  num_workers=20)
-    val_dataloader = DataLoader(val_dataset, batch_size=config.train.batch_size,
-                                collate_fn=SingleClassDataset.collate_fn, shuffle=False, drop_last=True,
-                                num_workers=20)
+                                  collate_fn=SBUDataset.collate_fn, shuffle=True, drop_last=True,
+                                  num_workers=8)
 
     # Initialize Trainer and train the model
     model = MarshallTrainer(config)
@@ -130,4 +103,4 @@ if __name__ == '__main__':
     else:
         trainer = Trainer(max_epochs=config.train.epochs, gradient_clip_val=1.0, enable_checkpointing=False,
                           logger=logger)
-    trainer.fit(model, train_dataloader, val_dataloader)
+    trainer.fit(model, train_dataloader)
