@@ -3,6 +3,7 @@ import os
 import random
 from typing import Dict, List, Union
 
+import numpy as np
 import torch
 import omegaconf
 from omegaconf.dictconfig import DictConfig
@@ -108,7 +109,11 @@ class SBUDataset(Dataset):
         image = image_data["image"]
         text = image_data["text"]
         if image is not None:
-            image = to_tensor(image.resize((self.config.dataset.input_size, self.config.dataset.input_size)))
+            # check if number of channels is 3
+            if np.asarray(image).shape[-1] == 3:
+                image = to_tensor(image.resize((self.config.dataset.input_size, self.config.dataset.input_size)))
+            else:
+                image = None
             return image, text
 
         for _ in range(retries + 1):
@@ -120,7 +125,12 @@ class SBUDataset(Dataset):
                 )
                 with urllib.request.urlopen(request, timeout=timeout) as req:
                     image = Image.open(io.BytesIO(req.read()))
-                    image = to_tensor(image.resize((self.config.dataset.input_size, self.config.dataset.input_size)))
+                    # check if number of channels is 3
+                    if np.asarray(image).shape[-1] == 3:
+                        image = to_tensor(image.resize((self.config.dataset.input_size,
+                                                        self.config.dataset.input_size)))
+                    else:
+                        image = None
                 break
             except Exception:
                 image = None

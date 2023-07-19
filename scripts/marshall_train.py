@@ -91,7 +91,7 @@ if __name__ == '__main__':
     # Initialize Dataloader
     train_dataloader = DataLoader(train_dataset, batch_size=config.train.batch_size,
                                   collate_fn=SBUDataset.collate_fn, shuffle=True, drop_last=True,
-                                  num_workers=8)
+                                  num_workers=20)
 
     # Initialize Trainer and train the model
     model = MarshallTrainer(config)
